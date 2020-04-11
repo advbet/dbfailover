@@ -19,21 +19,24 @@ func Example() {
 		"user:pass@tcp(127.0.0.3:3306)/db",
 	}
 
-	var dbs []*sql.DB
+	var dbhs []*sql.DB
 	for _, dsn := range dsns {
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
 			log.Print("failed to create db pool instance", err)
 			continue
 		}
-		dbs = append(dbs, db)
+		dbhs = append(dbhs, db)
 	}
 
-	pools := dbfailover.New(dbs)
-	defer pools.Stop()
+	dbs, err := dbfailover.New(dbhs)
+	if err != nil {
+		log.Fatal("failed to create DBs", err)
+	}
+	defer dbs.Stop()
 
 	svc := Service{
-		dbs: pools,
+		dbs: dbs,
 	}
 
 	svc.Insert()

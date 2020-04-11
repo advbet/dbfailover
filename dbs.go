@@ -5,6 +5,7 @@ package dbfailover
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sync"
 	"time"
 )
@@ -24,18 +25,26 @@ type statusUpdate struct {
 	status dbStatus
 }
 
+// ErrNoDatabases is returned from New() if empty slice of databases are
+// provided. Without any databases to start with we can not guarantee that
+// Master() and Slave() methods will never return nil.
+var ErrNoDatabases = errors.New("empty database set provided")
+
 // New creates a new instance of database pools checker.
 //
 // It will block until initial databases state is detected, therefore it is safe
 // to immediately query for master and slave pools after this function returns.
-func New(dbs []*sql.DB) *DBs {
+//
+// If dbs is empty slice it will return ErrNoDatabases error.
+func New(dbs []*sql.DB) (*DBs, error) {
+	if len(dbs) == 0 {
+		return nil, ErrNoDatabases
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	state := checkBatch(dbs)
-	var lastMaster *sql.DB
-	if len(dbs) > 0 {
-		lastMaster = dbs[0]
-	}
+	lastMaster := dbs[0]
 
 	p := &DBs{
 		active: makeSelection(state, lastMaster),
@@ -43,7 +52,7 @@ func New(dbs []*sql.DB) *DBs {
 	}
 	go p.run(ctx, state, lastMaster)
 
-	return p
+	return p, nil
 }
 
 // Master returns a database pool attached to the currently active master

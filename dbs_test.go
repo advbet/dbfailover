@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+func TestNewEmpty(t *testing.T) {
+	_, err := New(nil)
+	if err != ErrNoDatabases {
+		t.Fatalf("creating DBs with empty slice does not return ErrNoDatabases")
+	}
+}
+
 func TestNew(t *testing.T) {
 	master, cleanup := startMasterInstance(t)
 	defer cleanup()
@@ -13,7 +20,10 @@ func TestNew(t *testing.T) {
 	defer cleanup()
 	offline := startOfflineInstance(t)
 
-	p := New([]*sql.DB{master, slave, offline})
+	p, err := New([]*sql.DB{master, slave, offline})
+	if err != nil {
+		t.Fatalf("creating DBs failed with: %v", err)
+	}
 	defer p.Stop()
 
 	t.Run("master", func(t *testing.T) {
@@ -31,7 +41,7 @@ func TestNew(t *testing.T) {
 	})
 
 	// swap roles
-	_, err := master.Exec("SET GLOBAL read_only = 1")
+	_, err = master.Exec("SET GLOBAL read_only = 1")
 	if err != nil {
 		t.Fatalf("demoting master to slave: %v", err)
 	}
