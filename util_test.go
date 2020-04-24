@@ -1,10 +1,13 @@
 package dbfailover
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/ory/dockertest"
@@ -23,6 +26,8 @@ func init() {
 	mysql.SetLogger(voidLogger{})
 }
 
+var poolToHost = make(map[*sql.DB]string)
+
 var dockerPool = func() func(t *testing.T) *dockertest.Pool {
 	var err error
 	var pool *dockertest.Pool
@@ -38,9 +43,19 @@ var dockerPool = func() func(t *testing.T) *dockertest.Pool {
 }()
 
 func startMariaDB(pool *dockertest.Pool) (*dockertest.Resource, *sql.DB, error) {
-	resource, err := pool.Run("mariadb", mariaDBVersion, []string{
-		fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", mariaDBPassword),
-		fmt.Sprintf("MYSQL_DATABASE=%s", mariaDBName),
+	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
+		Repository: "mariadb",
+		Tag:        mariaDBVersion,
+		Cmd: []string{
+			"--log-bin",
+			"--binlog-format=ROW",
+			"--gtid-strict-mode=1",
+			fmt.Sprintf("--server-id=%d", rand.Intn(1<<31)),
+		},
+		Env: []string{
+			fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", mariaDBPassword),
+			fmt.Sprintf("MYSQL_DATABASE=%s", mariaDBName),
+		},
 	})
 	if err != nil {
 		return nil, nil, err
@@ -67,6 +82,7 @@ func startMariaDB(pool *dockertest.Pool) (*dockertest.Resource, *sql.DB, error) 
 		pool.Purge(resource)
 		return nil, nil, err
 	}
+	poolToHost[db] = resource.Container.NetworkSettings.IPAddress
 	return resource, db, nil
 }
 
@@ -99,7 +115,49 @@ func startOfflineInstance(t *testing.T) *sql.DB {
 	return db
 }
 
-func startSlaveInstance(t *testing.T) (*sql.DB, func()) {
+func waitForSlaveRunning(db *sql.DB, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	for ctx.Err() == nil {
+		var key string
+		var val string
+		err := db.QueryRowContext(ctx, "SHOW STATUS LIKE 'Slave_running'").Scan(&key, &val)
+		if err == nil && val == "ON" {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return ctx.Err()
+}
+
+func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
+	host, ok := poolToHost[master]
+	if !ok {
+		return fmt.Errorf("unable to find master host address")
+	}
+
+	var key, binLogPos string
+	if err := master.QueryRow("show variables like 'gtid_binlog_pos'").Scan(&key, &binLogPos); err != nil {
+		return fmt.Errorf("checking binlog pos on master: %w", err)
+	}
+
+	_, err := slave.Exec(fmt.Sprintf("SET GLOBAL gtid_slave_pos = '%s'", binLogPos))
+	if err != nil {
+		return fmt.Errorf("updating expected slave start pos: %w", err)
+	}
+	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", host, mariaDBUser, mariaDBPassword))
+	if err != nil {
+		return fmt.Errorf("configuring master connection on slave server: %w", err)
+	}
+	_, err = slave.Exec("START SLAVE")
+	if err != nil {
+		return fmt.Errorf("starting slave process on slave server: %w", err)
+	}
+	return nil
+}
+
+func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
 	docker := dockerPool(t)
 	r, db, err := startMariaDB(docker)
 	if err != nil {
@@ -110,6 +168,17 @@ func startSlaveInstance(t *testing.T) (*sql.DB, func()) {
 	if err != nil {
 		docker.Purge(r)
 		t.Fatalf("setting read_only flag on slave server: %v", err)
+	}
+
+	if master != nil {
+		if err := makeSlaveOf(db, master); err != nil {
+			docker.Purge(r)
+			t.Fatalf("failed to configure slave server: %v", err)
+		}
+		if err := waitForSlaveRunning(db, 5*time.Second); err != nil {
+			docker.Purge(r)
+			t.Fatalf("waiting for slave connection to be esablished: %v", err)
+		}
 	}
 
 	return db, func() {

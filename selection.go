@@ -18,15 +18,15 @@ func makeSelection(statuses map[*sql.DB]dbStatus, lastMaster *sql.DB) selection 
 	var slaveLatency time.Duration
 
 	for db, status := range statuses {
-		switch {
-		case !status.online:
+		switch status.role {
+		case roleOffline:
 			continue
-		case !status.readOnly:
+		case roleMaster:
 			if masterLatency == 0 || status.latency < masterLatency {
 				master = db
 				masterLatency = status.latency
 			}
-		case status.readOnly:
+		case roleSlave:
 			if slaveLatency == 0 || status.latency < slaveLatency {
 				slave = db
 				slaveLatency = status.latency

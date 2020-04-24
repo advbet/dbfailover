@@ -13,56 +13,109 @@ func TestNewEmpty(t *testing.T) {
 	}
 }
 
-func TestNew(t *testing.T) {
-	master, cleanup := startMasterInstance(t)
+func TestFailover(t *testing.T) {
+	adb, cleanup := startMasterInstance(t)
 	defer cleanup()
-	slave, cleanup := startSlaveInstance(t)
+	bdb, cleanup := startSlaveInstance(t, adb)
 	defer cleanup()
-	offline := startOfflineInstance(t)
+	cdb := startOfflineInstance(t)
 
-	p, err := New([]*sql.DB{master, slave, offline})
+	names := map[*sql.DB]string{
+		adb: "A",
+		bdb: "B",
+		cdb: "C",
+	}
+
+	p, err := New([]*sql.DB{adb, bdb, cdb})
 	if err != nil {
 		t.Fatalf("creating DBs failed with: %v", err)
 	}
 	defer p.Stop()
 
-	t.Run("master", func(t *testing.T) {
+	t.Run("initial setup", func(t *testing.T) {
 		m := p.Master()
-		if m != master {
-			t.Fatalf("master database does not match, got %v, expected %v", m, master)
+		if m != adb {
+			t.Fatalf("master database does not match, got %v, expected %v", names[m], names[adb])
 		}
-	})
-
-	t.Run("slave", func(t *testing.T) {
 		s := p.Slave()
-		if s != slave {
-			t.Fatalf("slave database does not match, got %v, expected %v", s, slave)
+		if s != bdb {
+			t.Fatalf("slave database does not match, got %v, expected %v", names[s], names[bdb])
 		}
 	})
 
-	// swap roles
-	_, err = master.Exec("SET GLOBAL read_only = 1")
+	// perform failover
+	// step 1 make B db writable
+	_, err = bdb.Exec("SET GLOBAL read_only = 0")
 	if err != nil {
-		t.Fatalf("demoting master to slave: %v", err)
+		t.Fatalf("making B db writable: %v", err)
 	}
-	_, err = slave.Exec("SET GLOBAL read_only = 0")
-	if err != nil {
-		t.Fatalf("promoting slave to master: %v", err)
-	}
-
 	time.Sleep(readOnlyInterval + 100*time.Millisecond)
-
-	t.Run("master as slave", func(t *testing.T) {
-		m := p.Slave()
-		if m != master {
-			t.Fatalf("master database does not match, got %v, expected %v", m, master)
+	t.Run("step 1 B is writable", func(t *testing.T) {
+		m := p.Master()
+		if m != adb {
+			t.Fatalf("master database does not match, got %v, expected %v", names[m], names[adb])
+		}
+		s := p.Slave()
+		if s != bdb {
+			t.Fatalf("slave database does not match, got %v, expected %v", names[s], names[bdb])
 		}
 	})
 
-	t.Run("slave as master", func(t *testing.T) {
-		s := p.Master()
-		if s != slave {
-			t.Fatalf("slave database does not match, got %v, expected %v", s, slave)
+	// step 2 make A db read-only
+	_, err = adb.Exec("SET GLOBAL read_only = 1")
+	if err != nil {
+		t.Fatalf("making A db read-only: %v", err)
+	}
+	time.Sleep(readOnlyInterval + 100*time.Millisecond)
+	t.Run("step 2 A is read-only", func(t *testing.T) {
+		// master is considered offline now, we are getting old master as fallback
+		m := p.Master()
+		if m != adb {
+			t.Fatalf("master database does not match, got %v, expected %v", names[m], names[adb])
+		}
+		s := p.Slave()
+		if s != bdb {
+			t.Fatalf("slave database does not match, got %v, expected %v", names[s], names[bdb])
+		}
+	})
+
+	// step 3 configure A db as slave
+	err = makeSlaveOf(adb, bdb)
+	if err != nil {
+		t.Fatalf("making B db slave of A db: %v", err)
+	}
+	time.Sleep(readOnlyInterval + 100*time.Millisecond)
+	t.Run("step 3 A is slave of B", func(t *testing.T) {
+		// master is considered slave now, we are getting old master as fallback
+		m := p.Master()
+		if m != adb {
+			t.Fatalf("master database does not match, got %v, expected %v", names[m], names[adb])
+		}
+		// both servers are in slave role now
+		s := p.Slave()
+		if s != bdb && s != adb {
+			t.Fatalf("slave database does not match, got %v, expected %v or %v", names[s], names[bdb], names[adb])
+		}
+	})
+
+	// step 4 reset slave on B db
+	_, err = bdb.Exec("STOP SLAVE")
+	if err != nil {
+		t.Fatalf("stopping slave on B db: %v", err)
+	}
+	_, err = bdb.Exec("RESET SLAVE")
+	if err != nil {
+		t.Fatalf("resetting slave on B db: %v", err)
+	}
+	time.Sleep(readOnlyInterval + 100*time.Millisecond)
+	t.Run("step 4 B is master", func(t *testing.T) {
+		m := p.Master()
+		if m != bdb {
+			t.Fatalf("master database does not match, got %v, expected %v", names[m], names[bdb])
+		}
+		s := p.Slave()
+		if s != adb {
+			t.Fatalf("slave database does not match, got %v, expected %v", names[s], names[adb])
 		}
 	})
 }

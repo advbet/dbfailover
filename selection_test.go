@@ -23,7 +23,7 @@ func TestMakeSelection(t *testing.T) {
 		{
 			msg: "single master",
 			states: map[*sql.DB]dbStatus{
-				db1: {online: true, readOnly: false},
+				db1: {role: roleMaster},
 			},
 			want: selection{
 				master:     db1,
@@ -44,8 +44,8 @@ func TestMakeSelection(t *testing.T) {
 		{
 			msg: "one_master_one_slave",
 			states: map[*sql.DB]dbStatus{
-				db1: {online: true, readOnly: false},
-				db2: {online: true, readOnly: true},
+				db1: {role: roleMaster},
+				db2: {role: roleSlave},
 			},
 			want: selection{
 				master:     db1,
@@ -56,9 +56,9 @@ func TestMakeSelection(t *testing.T) {
 		{
 			msg: "one master two slaves pick lowest latency",
 			states: map[*sql.DB]dbStatus{
-				db1: {online: true, readOnly: false, latency: 1 * time.Second},
-				db2: {online: true, readOnly: true, latency: 5 * time.Second},
-				db3: {online: true, readOnly: true, latency: 2 * time.Second},
+				db1: {role: roleMaster, latency: 1 * time.Second},
+				db2: {role: roleSlave, latency: 5 * time.Second},
+				db3: {role: roleSlave, latency: 2 * time.Second},
 			},
 			want: selection{
 				master:     db1,
@@ -69,9 +69,9 @@ func TestMakeSelection(t *testing.T) {
 		{
 			msg: "two masters one slave pick lowest latency",
 			states: map[*sql.DB]dbStatus{
-				db1: {online: true, readOnly: false, latency: 5 * time.Second},
-				db2: {online: true, readOnly: false, latency: 2 * time.Second},
-				db3: {online: true, readOnly: true, latency: 1 * time.Second},
+				db1: {role: roleMaster, latency: 5 * time.Second},
+				db2: {role: roleMaster, latency: 2 * time.Second},
+				db3: {role: roleSlave, latency: 1 * time.Second},
 			},
 			want: selection{
 				master:     db2,
@@ -82,7 +82,7 @@ func TestMakeSelection(t *testing.T) {
 		{
 			msg: "slave only",
 			states: map[*sql.DB]dbStatus{
-				db1: {online: true, readOnly: true},
+				db1: {role: roleSlave},
 			},
 			lastMaster: db2,
 			want: selection{
@@ -94,9 +94,9 @@ func TestMakeSelection(t *testing.T) {
 		{
 			msg: "offline only",
 			states: map[*sql.DB]dbStatus{
-				db1: {online: false},
-				db2: {online: false},
-				db3: {online: false},
+				db1: {role: roleOffline},
+				db2: {role: roleOffline},
+				db3: {role: roleOffline},
 			},
 			want: selection{
 				master:     nil,
