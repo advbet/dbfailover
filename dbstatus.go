@@ -56,9 +56,14 @@ func mergeStatus(ss slaveStatus, rs readOnlyStatus) dbStatus {
 	case !rs.online:
 		// skip checking if any of the checks failed
 		role = roleOffline
-	case !ss.online:
-		// skip checking if any of the checks failed
-		role = roleOffline
+	case rs.readOnly && !ss.online:
+		// slave status might fail beacause of missing REPLICTION CLIENT
+		// permission, server is read-only.
+		role = roleSlave
+	case !rs.readOnly && !ss.online:
+		// slave status might fail beacause of missing REPLICTION CLIENT
+		// permission, server is writable.
+		role = roleMaster
 	case rs.readOnly && ss.configured && ss.runningIO && ss.runningSQL:
 		// Perfect slave, read-only and all slave threads running
 		role = roleSlave

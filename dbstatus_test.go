@@ -26,15 +26,29 @@ func TestMergeStatus(t *testing.T) {
 			},
 		},
 		{
-			msg: "slave check failed",
+			msg: "slave check failed, writable server",
 			rs: readOnlyStatus{
-				online: true,
+				online:   true,
+				readOnly: false,
 			},
 			ss: slaveStatus{
 				online: false,
 			},
 			want: dbStatus{
-				role: roleOffline,
+				role: roleMaster,
+			},
+		},
+		{
+			msg: "slave check failed, read-only server",
+			rs: readOnlyStatus{
+				online:   true,
+				readOnly: true,
+			},
+			ss: slaveStatus{
+				online: false,
+			},
+			want: dbStatus{
+				role: roleSlave,
 			},
 		},
 		{
