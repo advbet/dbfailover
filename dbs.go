@@ -17,7 +17,13 @@ const readOnlyInterval = 1500 * time.Millisecond
 type DBs struct {
 	active selection
 	stop   func()
+	config Config
 	mu     sync.RWMutex
+}
+
+// Config holds configuration for DB pools.
+type Config struct {
+	SkipSlaveCheck bool
 }
 
 type statusUpdate struct {
@@ -37,18 +43,24 @@ var ErrNoDatabases = errors.New("empty database set provided")
 //
 // If dbs is empty slice it will return ErrNoDatabases error.
 func New(dbs []*sql.DB) (*DBs, error) {
+	return NewWithConfig(dbs, Config{})
+}
+
+// NewWithConfig is same as New but allows passing a configuration struct.
+func NewWithConfig(dbs []*sql.DB, cfg Config) (*DBs, error) {
 	if len(dbs) == 0 {
 		return nil, ErrNoDatabases
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	state := checkBatch(dbs)
+	state := checkBatch(dbs, cfg.SkipSlaveCheck)
 	lastMaster := dbs[0]
 
 	p := &DBs{
 		active: makeSelection(state, lastMaster),
 		stop:   cancel,
+		config: cfg,
 	}
 	go p.run(ctx, state, lastMaster)
 
@@ -102,7 +114,7 @@ func (p *DBs) Stop() {
 func (p *DBs) run(ctx context.Context, state map[*sql.DB]dbStatus, lastMaster *sql.DB) {
 	updates := make(chan statusUpdate)
 	for db := range state {
-		go checkLoop(ctx, db, updates)
+		go checkLoop(ctx, db, updates, p.config.SkipSlaveCheck)
 	}
 
 	for {
@@ -123,14 +135,14 @@ func (p *DBs) run(ctx context.Context, state map[*sql.DB]dbStatus, lastMaster *s
 	}
 }
 
-func checkBatch(dbs []*sql.DB) map[*sql.DB]dbStatus {
+func checkBatch(dbs []*sql.DB, skipSlaveCheck bool) map[*sql.DB]dbStatus {
 	ss := make([]dbStatus, len(dbs))
 	var wg sync.WaitGroup
 	wg.Add(len(dbs))
 	for i := range dbs {
 		go func(i int) {
 			defer wg.Done()
-			ss[i] = checkDBStatus(dbs[i])
+			ss[i] = checkDBStatus(dbs[i], skipSlaveCheck)
 		}(i)
 	}
 	wg.Wait()
@@ -142,7 +154,7 @@ func checkBatch(dbs []*sql.DB) map[*sql.DB]dbStatus {
 	return out
 }
 
-func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate) {
+func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate, skipSlaveCheck bool) {
 	t := time.NewTicker(readOnlyInterval)
 	defer t.Stop()
 
@@ -151,7 +163,7 @@ func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			status := checkDBStatus(db)
+			status := checkDBStatus(db, skipSlaveCheck)
 			select {
 			case <-ctx.Done():
 				return

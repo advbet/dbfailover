@@ -108,19 +108,22 @@ func mergeStatus(ss slaveStatus, rs readOnlyStatus) dbStatus {
 	}
 }
 
-func checkDBStatus(db *sql.DB) dbStatus {
+func checkDBStatus(db *sql.DB, skipSlaveCheck bool) dbStatus {
 	var wg sync.WaitGroup
 	var ss slaveStatus
 	var rs readOnlyStatus
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		rs = checkReadOnlyStatus(db)
 	}()
-	go func() {
-		defer wg.Done()
-		ss = checkSlaveStatus(db)
-	}()
+	if !skipSlaveCheck {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ss = checkSlaveStatus(db)
+		}()
+	}
 	wg.Wait()
 
 	return mergeStatus(ss, rs)
