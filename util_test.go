@@ -6,15 +6,16 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/ory/dockertest"
+	"github.com/ory/dockertest/v3"
 )
 
 const mariaDBVersion = "10.3"
-const mariaDBPassword = "secret"
+const mariaDBPassword = ""
 const mariaDBUser = "root"
 const mariaDBName = "testing"
 
@@ -42,19 +43,29 @@ var dockerPool = func() func(t *testing.T) *dockertest.Pool {
 	}
 }()
 
-func startMariaDB(pool *dockertest.Pool) (*dockertest.Resource, *sql.DB, error) {
+func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockertest.Resource, *sql.DB, error) {
+	args := []string{
+		"--log-bin",
+		"--binlog-format=ROW",
+		"--gtid-strict-mode=1",
+		"--wsrep-provider=/usr/lib/libgalera_smm.so",
+		"--innodb-autoinc-lock-mode=2",
+		fmt.Sprintf("--server-id=%d", rand.Intn(1<<31)),
+	}
+
+	if wsrep {
+		args = append(args, "--wsrep-on=1")
+		args = append(args, fmt.Sprintf("--wsrep-cluster-address=gcomm://%s", strings.Join(peers, ",")))
+	}
+
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "mariadb",
 		Tag:        mariaDBVersion,
-		Cmd: []string{
-			"--log-bin",
-			"--binlog-format=ROW",
-			"--gtid-strict-mode=1",
-			fmt.Sprintf("--server-id=%d", rand.Intn(1<<31)),
-		},
+		Cmd:        args,
 		Env: []string{
-			fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", mariaDBPassword),
 			fmt.Sprintf("MYSQL_DATABASE=%s", mariaDBName),
+			"MYSQL_ALLOW_EMPTY_PASSWORD=yes",
+			"MYSQL_INITDB_SKIP_TZINFO=yes",
 		},
 	})
 	if err != nil {
@@ -88,9 +99,29 @@ func startMariaDB(pool *dockertest.Pool) (*dockertest.Resource, *sql.DB, error) 
 
 func startMasterInstance(t *testing.T) (*sql.DB, func()) {
 	docker := dockerPool(t)
-	r, db, err := startMariaDB(docker)
+	r, db, err := startMariaDB(docker, false)
 	if err != nil {
 		t.Fatalf("starting master DB instance: %v", err)
+	}
+	return db, func() {
+		docker.Purge(r)
+	}
+}
+
+func startGaleraInstance(t *testing.T, peers ...*sql.DB) (*sql.DB, func()) {
+	var addrs []string
+	for _, db := range peers {
+		host, ok := poolToHost[db]
+		if !ok {
+			t.Fatal("unable to find peer address")
+		}
+		addrs = append(addrs, host)
+	}
+
+	docker := dockerPool(t)
+	r, db, err := startMariaDB(docker, true, addrs...)
+	if err != nil {
+		t.Fatalf("starting galera DB instance: %v", err)
 	}
 	return db, func() {
 		docker.Purge(r)
@@ -159,7 +190,7 @@ func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
 
 func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
 	docker := dockerPool(t)
-	r, db, err := startMariaDB(docker)
+	r, db, err := startMariaDB(docker, false)
 	if err != nil {
 		t.Fatalf("starting slave DB instance: %v", err)
 	}

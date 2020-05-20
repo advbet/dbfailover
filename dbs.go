@@ -23,7 +23,8 @@ type DBs struct {
 
 // Config holds configuration for DB pools.
 type Config struct {
-	SkipSlaveCheck bool
+	SkipSlaveCheck  bool
+	SkipGaleraCheck bool
 }
 
 type statusUpdate struct {
@@ -54,7 +55,7 @@ func NewWithConfig(dbs []*sql.DB, cfg Config) (*DBs, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	state := checkBatch(dbs, cfg.SkipSlaveCheck)
+	state := checkBatch(dbs, cfg.SkipSlaveCheck, cfg.SkipGaleraCheck)
 	lastMaster := dbs[0]
 
 	p := &DBs{
@@ -114,7 +115,7 @@ func (p *DBs) Stop() {
 func (p *DBs) run(ctx context.Context, state map[*sql.DB]dbStatus, lastMaster *sql.DB) {
 	updates := make(chan statusUpdate)
 	for db := range state {
-		go checkLoop(ctx, db, updates, p.config.SkipSlaveCheck)
+		go checkLoop(ctx, db, updates, p.config.SkipSlaveCheck, p.config.SkipGaleraCheck)
 	}
 
 	for {
@@ -135,14 +136,14 @@ func (p *DBs) run(ctx context.Context, state map[*sql.DB]dbStatus, lastMaster *s
 	}
 }
 
-func checkBatch(dbs []*sql.DB, skipSlaveCheck bool) map[*sql.DB]dbStatus {
+func checkBatch(dbs []*sql.DB, skipSlaveCheck bool, skipWsrepCheck bool) map[*sql.DB]dbStatus {
 	ss := make([]dbStatus, len(dbs))
 	var wg sync.WaitGroup
 	wg.Add(len(dbs))
 	for i := range dbs {
 		go func(i int) {
 			defer wg.Done()
-			ss[i] = checkDBStatus(dbs[i], skipSlaveCheck)
+			ss[i] = checkDBStatus(dbs[i], skipSlaveCheck, skipWsrepCheck)
 		}(i)
 	}
 	wg.Wait()
@@ -154,7 +155,7 @@ func checkBatch(dbs []*sql.DB, skipSlaveCheck bool) map[*sql.DB]dbStatus {
 	return out
 }
 
-func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate, skipSlaveCheck bool) {
+func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate, skipSlaveCheck bool, skipWsrepCheck bool) {
 	t := time.NewTicker(readOnlyInterval)
 	defer t.Stop()
 
@@ -163,7 +164,7 @@ func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate, ski
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			status := checkDBStatus(db, skipSlaveCheck)
+			status := checkDBStatus(db, skipSlaveCheck, skipWsrepCheck)
 			select {
 			case <-ctx.Done():
 				return

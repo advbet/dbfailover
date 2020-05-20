@@ -11,6 +11,7 @@ func TestMergeStatus(t *testing.T) {
 		msg  string
 		rs   readOnlyStatus
 		ss   slaveStatus
+		ws   wsrepStatus
 		want dbStatus
 	}{
 		{
@@ -60,6 +61,42 @@ func TestMergeStatus(t *testing.T) {
 			ss: slaveStatus{
 				online:     true,
 				configured: false,
+			},
+			want: dbStatus{
+				role: roleMaster,
+			},
+		},
+		{
+			msg: "perfect master, failed wsrep",
+			rs: readOnlyStatus{
+				online:   true,
+				readOnly: false,
+			},
+			ss: slaveStatus{
+				online:     true,
+				configured: false,
+			},
+			ws: wsrepStatus{
+				online: true,
+				ready:  false,
+			},
+			want: dbStatus{
+				role: roleOffline,
+			},
+		},
+		{
+			msg: "perfect master, good wsrep",
+			rs: readOnlyStatus{
+				online:   true,
+				readOnly: false,
+			},
+			ss: slaveStatus{
+				online:     true,
+				configured: false,
+			},
+			ws: wsrepStatus{
+				online: true,
+				ready:  true,
 			},
 			want: dbStatus{
 				role: roleMaster,
@@ -124,6 +161,46 @@ func TestMergeStatus(t *testing.T) {
 				configured: true,
 				runningIO:  true,
 				runningSQL: true,
+			},
+			want: dbStatus{
+				role: roleSlave,
+			},
+		},
+		{
+			msg: "perfect slave, failed wsrep",
+			rs: readOnlyStatus{
+				online:   true,
+				readOnly: true,
+			},
+			ss: slaveStatus{
+				online:     true,
+				configured: true,
+				runningIO:  true,
+				runningSQL: true,
+			},
+			ws: wsrepStatus{
+				online: true,
+				ready:  false,
+			},
+			want: dbStatus{
+				role: roleOffline,
+			},
+		},
+		{
+			msg: "perfect slave, good wsrep",
+			rs: readOnlyStatus{
+				online:   true,
+				readOnly: true,
+			},
+			ss: slaveStatus{
+				online:     true,
+				configured: true,
+				runningIO:  true,
+				runningSQL: true,
+			},
+			ws: wsrepStatus{
+				online: true,
+				ready:  true,
 			},
 			want: dbStatus{
 				role: roleSlave,
@@ -211,7 +288,7 @@ func TestMergeStatus(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			got := mergeStatus(test.ss, test.rs)
+			got := mergeStatus(test.ss, test.rs, test.ws)
 			if got != test.want {
 				t.Errorf("rs: %v, ss: %v, expected: %v, got: %v", test.rs, test.ss, test.want, got)
 			}
@@ -355,6 +432,75 @@ func TestCheckReadOnlyStatus(t *testing.T) {
 			}
 			if status.readOnly != test.readOnly {
 				t.Errorf("readOnly, expected %v, got %v", test.readOnly, status.readOnly)
+			}
+			if status.latency <= 0 {
+				t.Errorf("latency, expected > 0, got %v", status.latency)
+			}
+		})
+	}
+}
+
+func TestCheckWsrepStatus(t *testing.T) {
+	dp := dockerPool(t)
+	net, err := dp.CreateNetwork("wsrep")
+	if err != nil {
+		t.Fatalf("creating docker network for galera: %v", err)
+	}
+	defer net.Close()
+
+	master, cleanup := startMasterInstance(t)
+	defer cleanup()
+	node1, cleanup := startGaleraInstance(t)
+	defer cleanup()
+	node2, cleanup := startGaleraInstance(t, node1)
+	defer cleanup()
+	node3, cleanup := startGaleraInstance(t, node1, node2)
+	defer cleanup()
+
+	tests := []struct {
+		msg    string
+		db     *sql.DB
+		online bool
+		ready  bool
+	}{
+		{
+			msg:    "master",
+			db:     master,
+			online: false,
+			ready:  false,
+		},
+		{
+			msg:    "node1",
+			db:     node1,
+			online: true,
+			ready:  true,
+		},
+		{
+			msg:    "node2",
+			db:     node2,
+			online: true,
+			ready:  true,
+		},
+		{
+			msg:    "node3",
+			db:     node3,
+			online: true,
+			ready:  true,
+		},
+		// Can not find a way to make one of the nodes in a failed state
+		// The only reliable way to do it is to cut the nodes network
+		// But this makes the node to look offline for tests as well
+	}
+
+	for _, test := range tests {
+		t.Run(test.msg, func(t *testing.T) {
+			status := checkWsrepStatus(test.db)
+
+			if status.online != test.online {
+				t.Errorf("online, expected %v, got %v", test.online, status.online)
+			}
+			if status.ready != test.ready {
+				t.Errorf("ready, expected %v, got %v", test.ready, status.ready)
 			}
 			if status.latency <= 0 {
 				t.Errorf("latency, expected > 0, got %v", status.latency)

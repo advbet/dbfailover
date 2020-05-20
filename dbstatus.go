@@ -36,6 +36,12 @@ type slaveStatus struct {
 	latency    time.Duration
 }
 
+type wsrepStatus struct {
+	online  bool
+	ready   bool
+	latency time.Duration
+}
+
 const queryTimeout = 1 * time.Second
 const replicationTimeout = 5 * time.Minute
 
@@ -49,7 +55,7 @@ func maxTime(ts ...time.Duration) time.Duration {
 	return max
 }
 
-func mergeStatus(ss slaveStatus, rs readOnlyStatus) dbStatus {
+func mergeStatus(ss slaveStatus, rs readOnlyStatus, ws wsrepStatus) dbStatus {
 	role := roleOffline
 
 	switch {
@@ -102,16 +108,24 @@ func mergeStatus(ss slaveStatus, rs readOnlyStatus) dbStatus {
 		role = roleOffline
 	}
 
+	// Make sure we will not use failed galera cluster nodes
+	if ws.online && !ws.ready {
+		role = roleOffline
+	}
+
 	return dbStatus{
 		role:    role,
 		latency: maxTime(rs.latency, ss.latency),
 	}
 }
 
-func checkDBStatus(db *sql.DB, skipSlaveCheck bool) dbStatus {
+func checkDBStatus(db *sql.DB, skipSlaveCheck bool, skipWsrepCheck bool) dbStatus {
 	var wg sync.WaitGroup
+
 	var ss slaveStatus
 	var rs readOnlyStatus
+	var ws wsrepStatus
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -124,9 +138,17 @@ func checkDBStatus(db *sql.DB, skipSlaveCheck bool) dbStatus {
 			ss = checkSlaveStatus(db)
 		}()
 	}
+	if !skipWsrepCheck {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ws = checkWsrepStatus(db)
+		}()
+	}
+
 	wg.Wait()
 
-	return mergeStatus(ss, rs)
+	return mergeStatus(ss, rs, ws)
 }
 
 func checkReadOnlyStatus(db *sql.DB) readOnlyStatus {
@@ -149,6 +171,31 @@ func checkReadOnlyStatus(db *sql.DB) readOnlyStatus {
 		online:   true,
 		readOnly: val == "ON",
 		latency:  d,
+	}
+}
+
+func checkWsrepStatus(db *sql.DB) wsrepStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+
+	var key string
+	var val string
+	start := time.Now()
+	err := db.QueryRowContext(ctx, "SHOW VARIABLES LIKE 'wsrep_on'").Scan(&key, &val)
+	d := time.Since(start)
+
+	if err != nil || val != "ON" {
+		return wsrepStatus{
+			online:  false,
+			latency: d,
+		}
+	}
+
+	err = db.QueryRowContext(ctx, "SHOW GLOBAL STATUS LIKE 'wsrep_ready'").Scan(&key, &val)
+	return wsrepStatus{
+		online:  true,
+		ready:   err == nil && val == "ON",
+		latency: d,
 	}
 }
 
