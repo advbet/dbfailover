@@ -13,8 +13,14 @@ import (
 
 func main() {
 	var dsnsFlag string
+	var cfg dbfailover.Config
 
 	flag.StringVar(&dsnsFlag, "dsns", "", "List of comma separated DB DSN")
+	flag.BoolVar(&cfg.SkipSlaveCheck, "skip-slave-check", false, "Skip slave status checks")
+	flag.BoolVar(&cfg.SkipGaleraCheck, "skip-galera-check", false, "Skip galera status checks")
+	flag.DurationVar(&cfg.CheckInterval, "check-interval", 1500*time.Millisecond, "Interval between status checks")
+	flag.DurationVar(&cfg.CheckTimeout, "check-timeout", 1500*time.Millisecond, "Max check duration before timeout")
+	flag.DurationVar(&cfg.CheckTimeout, "max-replication-delay", 5*time.Minute, "Max allowed slave delay behind master")
 	flag.Parse()
 
 	var dbs []*sql.DB
@@ -32,7 +38,7 @@ func main() {
 		hosts[db] = cfg.Addr
 	}
 
-	db, err := dbfailover.New(dbs)
+	db, err := dbfailover.NewWithConfig(dbs, cfg)
 	if err != nil {
 		log.Fatal("creating dbfailover pool: ", err)
 	}

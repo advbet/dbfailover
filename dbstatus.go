@@ -42,9 +42,6 @@ type wsrepStatus struct {
 	latency time.Duration
 }
 
-const queryTimeout = 1 * time.Second
-const replicationTimeout = 5 * time.Minute
-
 func maxTime(ts ...time.Duration) time.Duration {
 	var max time.Duration
 	for _, t := range ts {
@@ -55,7 +52,7 @@ func maxTime(ts ...time.Duration) time.Duration {
 	return max
 }
 
-func mergeStatus(ss slaveStatus, rs readOnlyStatus, ws wsrepStatus) dbStatus {
+func mergeStatus(ss slaveStatus, rs readOnlyStatus, ws wsrepStatus, maxReplicationDelay time.Duration) dbStatus {
 	role := roleOffline
 
 	switch {
@@ -104,7 +101,7 @@ func mergeStatus(ss slaveStatus, rs readOnlyStatus, ws wsrepStatus) dbStatus {
 	}
 
 	// Make sure slave server is not lagging behind
-	if role == roleSlave && ss.delay > replicationTimeout {
+	if role == roleSlave && ss.delay > maxReplicationDelay {
 		role = roleOffline
 	}
 
@@ -119,7 +116,7 @@ func mergeStatus(ss slaveStatus, rs readOnlyStatus, ws wsrepStatus) dbStatus {
 	}
 }
 
-func checkDBStatus(db *sql.DB, skipSlaveCheck bool, skipWsrepCheck bool) dbStatus {
+func checkDBStatus(db *sql.DB, cfg Config) dbStatus {
 	var wg sync.WaitGroup
 
 	var ss slaveStatus
@@ -129,30 +126,30 @@ func checkDBStatus(db *sql.DB, skipSlaveCheck bool, skipWsrepCheck bool) dbStatu
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		rs = checkReadOnlyStatus(db)
+		rs = checkReadOnlyStatus(db, cfg.CheckTimeout)
 	}()
-	if !skipSlaveCheck {
+	if !cfg.SkipSlaveCheck {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ss = checkSlaveStatus(db)
+			ss = checkSlaveStatus(db, cfg.CheckTimeout)
 		}()
 	}
-	if !skipWsrepCheck {
+	if !cfg.SkipGaleraCheck {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ws = checkWsrepStatus(db)
+			ws = checkWsrepStatus(db, cfg.CheckTimeout)
 		}()
 	}
 
 	wg.Wait()
 
-	return mergeStatus(ss, rs, ws)
+	return mergeStatus(ss, rs, ws, cfg.MaxReplicationDelay)
 }
 
-func checkReadOnlyStatus(db *sql.DB) readOnlyStatus {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func checkReadOnlyStatus(db *sql.DB, timeout time.Duration) readOnlyStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	var key string
@@ -174,8 +171,8 @@ func checkReadOnlyStatus(db *sql.DB) readOnlyStatus {
 	}
 }
 
-func checkWsrepStatus(db *sql.DB) wsrepStatus {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func checkWsrepStatus(db *sql.DB, timeout time.Duration) wsrepStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	var key string
@@ -199,8 +196,8 @@ func checkWsrepStatus(db *sql.DB) wsrepStatus {
 	}
 }
 
-func checkSlaveStatus(db *sql.DB) slaveStatus {
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+func checkSlaveStatus(db *sql.DB, timeout time.Duration) slaveStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	start := time.Now()

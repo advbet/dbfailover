@@ -10,7 +10,11 @@ import (
 	"time"
 )
 
-const readOnlyInterval = 1500 * time.Millisecond
+const (
+	defaultCheckInterval       = 1500 * time.Millisecond
+	defaultCheckTimeout        = 1500 * time.Millisecond
+	defaultMaxReplicationDelay = 5 * time.Minute
+)
 
 // DBs holds a list of pools of known DB servers and provides easy access for
 // getting currently active master or slave DB pool.
@@ -23,8 +27,11 @@ type DBs struct {
 
 // Config holds configuration for DB pools.
 type Config struct {
-	SkipSlaveCheck  bool
-	SkipGaleraCheck bool
+	SkipSlaveCheck      bool
+	SkipGaleraCheck     bool
+	CheckInterval       time.Duration // default 1.5 sec if empty
+	CheckTimeout        time.Duration // default 1.5 sec if empty
+	MaxReplicationDelay time.Duration // default 5 min if empty
 }
 
 type statusUpdate struct {
@@ -52,10 +59,19 @@ func NewWithConfig(dbs []*sql.DB, cfg Config) (*DBs, error) {
 	if len(dbs) == 0 {
 		return nil, ErrNoDatabases
 	}
+	if cfg.CheckInterval == 0 {
+		cfg.CheckInterval = defaultCheckInterval
+	}
+	if cfg.CheckTimeout == 0 {
+		cfg.CheckTimeout = defaultCheckTimeout
+	}
+	if cfg.MaxReplicationDelay == 0 {
+		cfg.MaxReplicationDelay = defaultMaxReplicationDelay
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	state := checkBatch(dbs, cfg.SkipSlaveCheck, cfg.SkipGaleraCheck)
+	state := checkBatch(dbs, cfg)
 	lastMaster := dbs[0]
 
 	p := &DBs{
@@ -115,7 +131,7 @@ func (p *DBs) Stop() {
 func (p *DBs) run(ctx context.Context, state map[*sql.DB]dbStatus, lastMaster *sql.DB) {
 	updates := make(chan statusUpdate)
 	for db := range state {
-		go checkLoop(ctx, db, updates, p.config.SkipSlaveCheck, p.config.SkipGaleraCheck)
+		go checkLoop(ctx, db, updates, p.config)
 	}
 
 	for {
@@ -136,14 +152,14 @@ func (p *DBs) run(ctx context.Context, state map[*sql.DB]dbStatus, lastMaster *s
 	}
 }
 
-func checkBatch(dbs []*sql.DB, skipSlaveCheck bool, skipWsrepCheck bool) map[*sql.DB]dbStatus {
+func checkBatch(dbs []*sql.DB, cfg Config) map[*sql.DB]dbStatus {
 	ss := make([]dbStatus, len(dbs))
 	var wg sync.WaitGroup
 	wg.Add(len(dbs))
 	for i := range dbs {
 		go func(i int) {
 			defer wg.Done()
-			ss[i] = checkDBStatus(dbs[i], skipSlaveCheck, skipWsrepCheck)
+			ss[i] = checkDBStatus(dbs[i], cfg)
 		}(i)
 	}
 	wg.Wait()
@@ -155,8 +171,8 @@ func checkBatch(dbs []*sql.DB, skipSlaveCheck bool, skipWsrepCheck bool) map[*sq
 	return out
 }
 
-func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate, skipSlaveCheck bool, skipWsrepCheck bool) {
-	t := time.NewTicker(readOnlyInterval)
+func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate, cfg Config) {
+	t := time.NewTicker(cfg.CheckInterval)
 	defer t.Stop()
 
 	for {
@@ -164,7 +180,7 @@ func checkLoop(ctx context.Context, db *sql.DB, updates chan<- statusUpdate, ski
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			status := checkDBStatus(db, skipSlaveCheck, skipWsrepCheck)
+			status := checkDBStatus(db, cfg)
 			select {
 			case <-ctx.Done():
 				return

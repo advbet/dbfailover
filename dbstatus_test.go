@@ -288,7 +288,7 @@ func TestMergeStatus(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			got := mergeStatus(test.ss, test.rs, test.ws)
+			got := mergeStatus(test.ss, test.rs, test.ws, defaultMaxReplicationDelay)
 			if got != test.want {
 				t.Errorf("rs: %v, ss: %v, expected: %v, got: %v", test.rs, test.ss, test.want, got)
 			}
@@ -371,7 +371,7 @@ func TestSlaveStatus(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			status := checkSlaveStatus(test.db)
+			status := checkSlaveStatus(test.db, defaultCheckTimeout)
 			if status.online != test.online {
 				t.Errorf("online, expected %v, got %v", test.online, status.online)
 			}
@@ -425,7 +425,7 @@ func TestCheckReadOnlyStatus(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			status := checkReadOnlyStatus(test.db)
+			status := checkReadOnlyStatus(test.db, defaultCheckTimeout)
 
 			if status.online != test.online {
 				t.Errorf("online, expected %v, got %v", test.online, status.online)
@@ -494,7 +494,7 @@ func TestCheckWsrepStatus(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.msg, func(t *testing.T) {
-			status := checkWsrepStatus(test.db)
+			status := checkWsrepStatus(test.db, defaultCheckTimeout)
 
 			if status.online != test.online {
 				t.Errorf("online, expected %v, got %v", test.online, status.online)

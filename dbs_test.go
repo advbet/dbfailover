@@ -49,7 +49,7 @@ func TestFailover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("making B db writable: %v", err)
 	}
-	time.Sleep(readOnlyInterval + 100*time.Millisecond)
+	time.Sleep(defaultCheckInterval + 100*time.Millisecond)
 	t.Run("step 1 B is writable", func(t *testing.T) {
 		m := p.Master()
 		if m != adb {
@@ -66,7 +66,7 @@ func TestFailover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("making A db read-only: %v", err)
 	}
-	time.Sleep(readOnlyInterval + 100*time.Millisecond)
+	time.Sleep(defaultCheckInterval + 100*time.Millisecond)
 	t.Run("step 2 A is read-only", func(t *testing.T) {
 		// master is considered offline now, we are getting old master as fallback
 		m := p.Master()
@@ -84,7 +84,7 @@ func TestFailover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("making B db slave of A db: %v", err)
 	}
-	time.Sleep(readOnlyInterval + 100*time.Millisecond)
+	time.Sleep(defaultCheckInterval + 100*time.Millisecond)
 	t.Run("step 3 A is slave of B", func(t *testing.T) {
 		// master is considered slave now, we are getting old master as fallback
 		m := p.Master()
@@ -107,7 +107,7 @@ func TestFailover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resetting slave on B db: %v", err)
 	}
-	time.Sleep(readOnlyInterval + 100*time.Millisecond)
+	time.Sleep(defaultCheckInterval + 100*time.Millisecond)
 	t.Run("step 4 B is master", func(t *testing.T) {
 		m := p.Master()
 		if m != bdb {
