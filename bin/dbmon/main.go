@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/advbet/dbfailover"
+	"github.com/advbet/dbfailover"
 	"github.com/go-sql-driver/mysql"
 )
 

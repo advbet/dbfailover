@@ -28,7 +28,7 @@ import (
         "database/sql"
         "log"
 
-        "bitbucket.org/advbet/dbfailover"
+        "github.com/advbet/dbfailover"
         _ "github.com/go-sql-driver/mysql"
 )
 
