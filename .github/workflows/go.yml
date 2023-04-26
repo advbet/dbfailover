@@ -14,12 +14,16 @@ jobs:
 
   go-test-matrix:
     runs-on: ubuntu-latest
+
     services:
       dind:
-        image: docker:23.0.4-dind
-        options: >-
-          --privileged
-          --health-cmd "docker version && docker info"    
+        image: docker:23.0-dind-rootless
+        ports:
+          - 2375:2375
+#        image: docker:23.0.4-dind
+#        options: >-
+#          --privileged
+#          --health-cmd "docker version && docker info"
 
     steps:
       - uses: actions/checkout@v3
@@ -34,6 +38,6 @@ jobs:
 
       - name: Test
         run: go test -v -race -failfast -timeout 60s ./...
-        env:
-          DOCKER_HOST: tcp://docker:2376
-          DOCKER_TLS_VERIFY: true
+#        env:
+#          DOCKER_HOST: tcp://docker:2376
+#          DOCKER_TLS_VERIFY: true
