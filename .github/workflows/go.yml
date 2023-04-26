@@ -40,5 +40,5 @@ jobs:
       - name: Test
         run: go test -v -race -failfast -timeout 60s ./...
         env:
-          DOCKER_HOST: tcp://dind:2375
+          DOCKER_HOST: tcp://localhost:2375
           CONTAINERS_HOST: dind
