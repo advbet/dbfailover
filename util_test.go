@@ -185,8 +185,8 @@ func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
 		return fmt.Errorf("updating expected slave start pos: %w", err)
 	}
 	fmt.Println(parts)
-	fmt.Println(getInternalHost())
-	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", getInternalHost(), parts[1], mariaDBUser, mariaDBPassword))
+	fmt.Println(getInternalHost(parts[0]))
+	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", getInternalHost(parts[0]), parts[1], mariaDBUser, mariaDBPassword))
 	if err != nil {
 		return fmt.Errorf("configuring master connection on slave server: %w", err)
 	}
@@ -238,10 +238,9 @@ func getExternalHost(resource *dockertest.Resource, id string) string {
 	return u.Hostname() + ":" + resource.GetPort(id)
 }
 
-func getInternalHost() string {
-	containerHost := os.Getenv("CONTAINER_HOST")
-	if containerHost == "" {
+func getInternalHost(host string) string {
+	if host == "localhost" {
 		return dockerHost
 	}
-	return containerHost
+	return host
 }
