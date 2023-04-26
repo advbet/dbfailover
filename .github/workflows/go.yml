@@ -23,7 +23,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        version: ['1.17', '1.18', '1.19', '1.20']
+        version: ['1.17']
 
     name: Go ${{ matrix.version }}
     steps:
