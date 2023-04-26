@@ -16,13 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     services:
       dind:
-        image: docker:23.0.4-dind-rootless
+        image: docker:23.0.4-dind
         options: >-
           --privileged
-          --health-cmd "docker version && docker info"
-          --health-interval 2s
-          --health-timeout 10s
-          --health-retries 10        
+          --health-cmd "docker version && docker info"    
 
     steps:
       - uses: actions/checkout@v3
