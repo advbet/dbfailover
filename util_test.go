@@ -239,13 +239,9 @@ func getHostPort(resource *dockertest.Resource, id string) string {
 }
 
 func getMasterHost() string {
-	dockerURL := os.Getenv("DOCKER_HOST")
-	if dockerURL == "" {
+	containerHost := os.Getenv("CONTAINER_HOST")
+	if containerHost == "" {
 		return dockerHost
 	}
-	u, err := url.Parse(dockerURL)
-	if err != nil {
-		panic(err)
-	}
-	return u.Hostname()
+	return containerHost
 }
