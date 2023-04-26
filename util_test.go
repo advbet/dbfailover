@@ -24,7 +24,7 @@ type voidLogger struct{}
 func (l voidLogger) Print(v ...interface{}) {}
 
 func init() {
-	mysql.SetLogger(voidLogger{})
+	_ = mysql.SetLogger(voidLogger{})
 }
 
 var poolToHost = make(map[*sql.DB]string)
