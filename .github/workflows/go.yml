@@ -18,6 +18,7 @@ jobs:
       dind:
         image: docker:23.0.4-dind-rootless
         options: >-
+          --privileged
           --health-cmd "docker version && docker info"
           --health-interval 2s
           --health-timeout 10s
