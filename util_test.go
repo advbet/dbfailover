@@ -155,6 +155,12 @@ func waitForSlaveRunning(db *sql.DB, timeout time.Duration) error {
 	for ctx.Err() == nil {
 		var key string
 		var val string
+		_ = db.QueryRowContext(ctx, "show master status").Scan(&key, &val)
+		fmt.Println(val)
+
+		_ = db.QueryRowContext(ctx, "show slave status").Scan(&key, &val)
+		fmt.Println(val)
+
 		err := db.QueryRowContext(ctx, "SHOW STATUS LIKE 'Slave_running'").Scan(&key, &val)
 		fmt.Println(val)
 		if err == nil && val == "ON" {
