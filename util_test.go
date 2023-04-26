@@ -155,14 +155,7 @@ func waitForSlaveRunning(db *sql.DB, timeout time.Duration) error {
 	for ctx.Err() == nil {
 		var key string
 		var val string
-		_ = db.QueryRowContext(ctx, "show master status").Scan(&key, &val)
-		fmt.Println(val)
-
-		_ = db.QueryRowContext(ctx, "show slave status").Scan(&key, &val)
-		fmt.Println(val)
-
 		err := db.QueryRowContext(ctx, "SHOW STATUS LIKE 'Slave_running'").Scan(&key, &val)
-		fmt.Println(val)
 		if err == nil && val == "ON" {
 			return nil
 		}
@@ -234,11 +227,11 @@ func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
 }
 
 func getHostPort(resource *dockertest.Resource, id string) string {
-	dockerURL := os.Getenv("DOCKER_HOST")
-	if dockerURL == "" {
+	containerHost := os.Getenv("CONTAINER_HOST")
+	if containerHost == "" {
 		return resource.GetHostPort(id)
 	}
-	u, err := url.Parse(dockerURL)
+	u, err := url.Parse(containerHost)
 	if err != nil {
 		panic(err)
 	}
