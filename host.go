@@ -1,3 +1,3 @@
 package dbfailover
 
-const dockerHost = "host.docker.internal"
+var dockerHost = "host.docker.internal"
