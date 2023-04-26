@@ -14,7 +14,7 @@ import (
 	"github.com/ory/dockertest/v3"
 )
 
-const mariaDBVersion = "10.3"
+const mariaDBVersion = "10.6"
 const mariaDBPassword = ""
 const mariaDBUser = "root"
 const mariaDBName = "testing"
@@ -27,7 +27,7 @@ func init() {
 	_ = mysql.SetLogger(voidLogger{})
 }
 
-var poolToHost = make(map[*sql.DB]string)
+var poolToHostPort = make(map[*sql.DB]string)
 
 var dockerPool = func() func(t *testing.T) *dockertest.Pool {
 	var err error
@@ -48,7 +48,7 @@ func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockerte
 		"--log-bin",
 		"--binlog-format=ROW",
 		"--gtid-strict-mode=1",
-		"--wsrep-provider=/usr/lib/libgalera_smm.so",
+		//"--wsrep-provider=/usr/lib/libgalera_smm.so",
 		"--innodb-autoinc-lock-mode=2",
 		fmt.Sprintf("--server-id=%d", rand.Intn(1<<31)),
 	}
@@ -72,9 +72,9 @@ func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockerte
 		return nil, nil, err
 	}
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:3306)/%s",
+		"%s:%s@tcp(%s)/%s",
 		mariaDBUser, mariaDBPassword,
-		resource.Container.NetworkSettings.IPAddress, mariaDBName,
+		resource.GetHostPort("3306/tcp"), mariaDBName,
 	)
 	if err = pool.Retry(func() error {
 		db, err := sql.Open("mysql", dsn)
@@ -93,7 +93,7 @@ func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockerte
 		pool.Purge(resource)
 		return nil, nil, err
 	}
-	poolToHost[db] = resource.Container.NetworkSettings.IPAddress
+	poolToHostPort[db] = resource.GetHostPort("3306/tcp")
 	return resource, db, nil
 }
 
@@ -109,17 +109,17 @@ func startMasterInstance(t *testing.T) (*sql.DB, func()) {
 }
 
 func startGaleraInstance(t *testing.T, peers ...*sql.DB) (*sql.DB, func()) {
-	var addrs []string
+	var hostsPorts []string
 	for _, db := range peers {
-		host, ok := poolToHost[db]
+		hostPort, ok := poolToHostPort[db]
 		if !ok {
 			t.Fatal("unable to find peer address")
 		}
-		addrs = append(addrs, host)
+		hostsPorts = append(hostsPorts, hostPort)
 	}
 
 	docker := dockerPool(t)
-	r, db, err := startMariaDB(docker, true, addrs...)
+	r, db, err := startMariaDB(docker, true, hostsPorts...)
 	if err != nil {
 		t.Fatalf("starting galera DB instance: %v", err)
 	}
@@ -163,9 +163,14 @@ func waitForSlaveRunning(db *sql.DB, timeout time.Duration) error {
 }
 
 func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
-	host, ok := poolToHost[master]
+	hostPort, ok := poolToHostPort[master]
 	if !ok {
-		return fmt.Errorf("unable to find master host address")
+		return fmt.Errorf("unable to find master hostPort address")
+	}
+
+	parts := strings.Split(hostPort, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid hostPort address: %s", hostPort)
 	}
 
 	var key, binLogPos string
@@ -177,7 +182,7 @@ func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("updating expected slave start pos: %w", err)
 	}
-	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", host, mariaDBUser, mariaDBPassword))
+	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = 'host.docker.internal', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", parts[1], mariaDBUser, mariaDBPassword))
 	if err != nil {
 		return fmt.Errorf("configuring master connection on slave server: %w", err)
 	}
