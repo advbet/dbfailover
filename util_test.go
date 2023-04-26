@@ -76,7 +76,7 @@ func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockerte
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s)/%s",
 		mariaDBUser, mariaDBPassword,
-		getHostPort(resource, "3306/tcp"), mariaDBName,
+		getExternalHost(resource, "3306/tcp"), mariaDBName,
 	)
 	if err = pool.Retry(func() error {
 		db, err := sql.Open("mysql", dsn)
@@ -95,7 +95,7 @@ func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockerte
 		pool.Purge(resource)
 		return nil, nil, err
 	}
-	poolToHostPort[db] = getHostPort(resource, "3306/tcp")
+	poolToHostPort[db] = getExternalHost(resource, "3306/tcp")
 	return resource, db, nil
 }
 
@@ -185,8 +185,8 @@ func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
 		return fmt.Errorf("updating expected slave start pos: %w", err)
 	}
 	fmt.Println(parts)
-	fmt.Println(getMasterHost())
-	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", getMasterHost(), parts[1], mariaDBUser, mariaDBPassword))
+	fmt.Println(getInternalHost())
+	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", getInternalHost(), parts[1], mariaDBUser, mariaDBPassword))
 	if err != nil {
 		return fmt.Errorf("configuring master connection on slave server: %w", err)
 	}
@@ -226,7 +226,7 @@ func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
 	}
 }
 
-func getHostPort(resource *dockertest.Resource, id string) string {
+func getExternalHost(resource *dockertest.Resource, id string) string {
 	containerHost := os.Getenv("CONTAINER_HOST")
 	if containerHost == "" {
 		return resource.GetHostPort(id)
@@ -238,7 +238,7 @@ func getHostPort(resource *dockertest.Resource, id string) string {
 	return u.Hostname() + ":" + resource.GetPort(id)
 }
 
-func getMasterHost() string {
+func getInternalHost() string {
 	containerHost := os.Getenv("CONTAINER_HOST")
 	if containerHost == "" {
 		return dockerHost
