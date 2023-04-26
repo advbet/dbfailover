@@ -1,4 +1,4 @@
-package dbfailover_test
+package main
 
 import (
 	"database/sql"
@@ -12,7 +12,7 @@ type Service struct {
 	dbs *dbfailover.DBs
 }
 
-func Example() {
+func main() {
 	dsns := []string{
 		"user:pass@tcp(127.0.0.1:3306)/db",
 		"user:pass@tcp(127.0.0.2:3306)/db",
