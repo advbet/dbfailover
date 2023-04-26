@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -182,7 +183,7 @@ func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("updating expected slave start pos: %w", err)
 	}
-	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = 'host.docker.internal:host-gateway', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", parts[1], mariaDBUser, mariaDBPassword))
+	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", getHost(), parts[1], mariaDBUser, mariaDBPassword))
 	if err != nil {
 		return fmt.Errorf("configuring master connection on slave server: %w", err)
 	}
@@ -220,4 +221,13 @@ func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
 	return db, func() {
 		docker.Purge(r)
 	}
+}
+
+func getHost() string {
+	containersURL := os.Getenv("CONTAINERS_HOST")
+	if containersURL != "" {
+		return containersURL
+	}
+
+	return dockerHost
 }
