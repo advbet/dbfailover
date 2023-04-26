@@ -18,7 +18,7 @@ jobs:
       dind:
         image: docker:23.0.4-dind-rootless
         options: >-
-          --health-cmd "bash -c '[[ "$(curl -ks https://docker:2375/_ping)" != "OK" ]]"
+          --health-cmd "bash -c '[[ "$(curl -s http://docker:2375/_ping)" != "OK" ]]"
           --health-interval 1s
           --health-timeout 5s
           --health-retries 5        
