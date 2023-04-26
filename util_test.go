@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -231,11 +230,7 @@ func getExternalHost(resource *dockertest.Resource, id string) string {
 	if containerHost == "" {
 		return resource.GetHostPort(id)
 	}
-	u, err := url.Parse(containerHost)
-	if err != nil {
-		panic(err)
-	}
-	return u.Hostname() + ":" + resource.GetPort(id)
+	return containerHost + ":" + resource.GetPort(id)
 }
 
 func getInternalHost(host string) string {
