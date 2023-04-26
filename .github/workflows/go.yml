@@ -19,9 +19,9 @@ jobs:
         image: docker:23.0.4-dind-rootless
         options: >-
           --health-cmd "docker version && docker info"
-          --health-interval 1s
-          --health-timeout 5s
-          --health-retries 5        
+          --health-interval 2s
+          --health-timeout 10s
+          --health-retries 10        
 
     steps:
       - uses: actions/checkout@v3
