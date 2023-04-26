@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -75,7 +76,7 @@ func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockerte
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s)/%s",
 		mariaDBUser, mariaDBPassword,
-		resource.GetHostPort("3306/tcp"), mariaDBName,
+		getHostPort(resource, "3306/tcp"), mariaDBName,
 	)
 	if err = pool.Retry(func() error {
 		db, err := sql.Open("mysql", dsn)
@@ -94,7 +95,7 @@ func startMariaDB(pool *dockertest.Pool, wsrep bool, peers ...string) (*dockerte
 		pool.Purge(resource)
 		return nil, nil, err
 	}
-	poolToHostPort[db] = resource.GetHostPort("3306/tcp")
+	poolToHostPort[db] = getHostPort(resource, "3306/tcp")
 	return resource, db, nil
 }
 
@@ -183,7 +184,7 @@ func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("updating expected slave start pos: %w", err)
 	}
-	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", getHost(), parts[1], mariaDBUser, mariaDBPassword))
+	_, err = slave.Exec(fmt.Sprintf("CHANGE MASTER TO MASTER_HOST = '%s', MASTER_PORT = %s, MASTER_USER = '%s', MASTER_PASSWORD = '%s', MASTER_USE_GTID = slave_pos", getMasterHost(), parts[1], mariaDBUser, mariaDBPassword))
 	if err != nil {
 		return fmt.Errorf("configuring master connection on slave server: %w", err)
 	}
@@ -223,11 +224,26 @@ func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
 	}
 }
 
-func getHost() string {
-	containersURL := os.Getenv("CONTAINERS_HOST")
-	if containersURL != "" {
-		return containersURL
+func getHostPort(resource *dockertest.Resource, id string) string {
+	dockerURL := os.Getenv("DOCKER_HOST")
+	if dockerURL == "" {
+		return resource.GetHostPort(id)
 	}
+	u, err := url.Parse(dockerURL)
+	if err != nil {
+		panic(err)
+	}
+	return u.Hostname() + ":" + resource.GetPort(id)
+}
 
-	return dockerHost
+func getMasterHost() string {
+	dockerURL := os.Getenv("DOCKER_HOST")
+	if dockerURL == "" {
+		return dockerHost
+	}
+	u, err := url.Parse(dockerURL)
+	if err != nil {
+		panic(err)
+	}
+	return u.Hostname()
 }
