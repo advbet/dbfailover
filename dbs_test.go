@@ -17,7 +17,7 @@ func TestFailover(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
 	defer func() {
-		_ = pool.RemoveNetwork(network)
+		pool.RemoveNetwork(network)
 	}()
 
 	adb, masterResource := startMasterInstance(t, pool, network)

@@ -300,7 +300,7 @@ func TestSlaveStatus(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
 	defer func() {
-		_ = pool.RemoveNetwork(network)
+		pool.RemoveNetwork(network)
 	}()
 
 	offline := startOfflineInstance(t)
@@ -410,7 +410,7 @@ func TestCheckReadOnlyStatus(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
 	defer func() {
-		_ = pool.RemoveNetwork(network)
+		pool.RemoveNetwork(network)
 	}()
 
 	master, masterResource := startMasterInstance(t, pool, network)
@@ -471,7 +471,7 @@ func TestCheckWsrepStatus(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
 	defer func() {
-		_ = pool.RemoveNetwork(network)
+		pool.RemoveNetwork(network)
 	}()
 
 	master, masterResource := startMasterInstance(t, pool, network)
