@@ -219,15 +219,6 @@ func startSlaveInstance(t *testing.T, pool *dockertest.Pool, network *dockertest
 	return db, r
 }
 
-//func getAppHostPort(resource *dockertest.Resource, id string) string {
-//	host := os.Getenv("DOCKER_HOST")
-//	if host != "" {
-//		return fmt.Sprintf("%s:%s", host, resource.GetPort(id))
-//	}
-//
-//	return resource.GetHostPort(id)
-//}
-
 func getHostPort(resource *dockertest.Resource, id string) string {
 	dockerURL := os.Getenv("DOCKER_HOST")
 	if dockerURL == "" {
