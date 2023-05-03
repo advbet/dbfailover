@@ -20,10 +20,8 @@ jobs:
         image: docker:23.0-dind
         ports:
           - 2375:2375
-#        image: docker:23.0.4-dind
 #        options: >-
 #          --privileged
-#          --health-cmd "docker version && docker info"
 
     steps:
       - uses: actions/checkout@v3
@@ -38,7 +36,5 @@ jobs:
 
       - name: Test
         run: go test -v -failfast -timeout 600s ./...
-        env:
-          DOCKER_HOST: tcp://dind:2375
-#          CONTAINER_HOST: dind
-#          DOCKER_TLS_VERIFY: true
+#        env:
+#          DOCKER_HOST: tcp://dind:2375
