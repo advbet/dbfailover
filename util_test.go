@@ -97,7 +97,7 @@ func startMariaDB(pool *dockertest.Pool, network *dockertest.Network, wsrep bool
 
 	err = resource.ConnectToNetwork(network)
 	if err != nil {
-		return nil, nil, err
+		return resource, nil, err
 	}
 
 	dsn := fmt.Sprintf(
@@ -113,36 +113,26 @@ func startMariaDB(pool *dockertest.Pool, network *dockertest.Network, wsrep bool
 		defer db.Close()
 		return db.Ping()
 	}); err != nil {
-		pool.Purge(resource)
-		_ = pool.RemoveNetwork(network)
-		return nil, nil, err
+		return resource, nil, err
 	}
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		pool.Purge(resource)
-		_ = pool.RemoveNetwork(network)
-		return nil, nil, err
+		return resource, nil, err
 	}
 	poolToHost[db] = resource.GetIPInNetwork(network)
 	return resource, db, nil
 }
 
-func startMasterInstance(t *testing.T) (*sql.DB, func()) {
-	pool := getDockerPool(t)
-	network := getDockerNetwork(t, pool)
-
+func startMasterInstance(t *testing.T, pool *dockertest.Pool, network *dockertest.Network) (*sql.DB, *dockertest.Resource) {
 	r, db, err := startMariaDB(pool, network, false)
 	if err != nil {
 		t.Fatalf("starting master DB instance: %v", err)
 	}
-	return db, func() {
-		pool.Purge(r)
-		_ = pool.RemoveNetwork(network)
-	}
+	return db, r
 }
 
-func startGaleraInstance(t *testing.T, peers ...*sql.DB) (*sql.DB, func()) {
+func startGaleraInstance(t *testing.T, pool *dockertest.Pool, network *dockertest.Network, peers ...*sql.DB) (*sql.DB, *dockertest.Resource) {
 	var hosts []string
 	for _, db := range peers {
 		host, ok := poolToHost[db]
@@ -152,17 +142,11 @@ func startGaleraInstance(t *testing.T, peers ...*sql.DB) (*sql.DB, func()) {
 		hosts = append(hosts, host)
 	}
 
-	pool := getDockerPool(t)
-	network := getDockerNetwork(t, pool)
-
 	r, db, err := startMariaDB(pool, network, true, hosts...)
 	if err != nil {
 		t.Fatalf("starting galera DB instance: %v", err)
 	}
-	return db, func() {
-		pool.Purge(r)
-		_ = pool.RemoveNetwork(network)
-	}
+	return db, r
 }
 
 func startOfflineInstance(t *testing.T) *sql.DB {
@@ -225,10 +209,7 @@ func makeSlaveOf(slave *sql.DB, master *sql.DB) error {
 	return nil
 }
 
-func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
-	pool := getDockerPool(t)
-	network := getDockerNetwork(t, pool)
-
+func startSlaveInstance(t *testing.T, pool *dockertest.Pool, network *dockertest.Network, master *sql.DB) (*sql.DB, *dockertest.Resource) {
 	r, db, err := startMariaDB(pool, network, false)
 	if err != nil {
 		t.Fatalf("starting slave DB instance: %v", err)
@@ -236,28 +217,19 @@ func startSlaveInstance(t *testing.T, master *sql.DB) (*sql.DB, func()) {
 
 	_, err = db.Exec("SET GLOBAL read_only = 1")
 	if err != nil {
-		pool.Purge(r)
-		_ = pool.RemoveNetwork(network)
 		t.Fatalf("setting read_only flag on slave server: %v", err)
 	}
 
 	if master != nil {
 		if err := makeSlaveOf(db, master); err != nil {
-			pool.Purge(r)
-			_ = pool.RemoveNetwork(network)
 			t.Fatalf("failed to configure slave server: %v", err)
 		}
 		if err := waitForSlaveRunning(db, 5*time.Second); err != nil {
-			pool.Purge(r)
-			_ = pool.RemoveNetwork(network)
 			t.Fatalf("waiting for slave connection to be esablished: %v", err)
 		}
 	}
 
-	return db, func() {
-		pool.Purge(r)
-		_ = pool.RemoveNetwork(network)
-	}
+	return db, r
 }
 
 func getAppHostPort(resource *dockertest.Resource, id string) string {
