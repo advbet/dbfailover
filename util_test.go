@@ -25,10 +25,8 @@ type voidLogger struct{}
 
 func (l voidLogger) Print(v ...interface{}) {}
 
-var poolOnce sync.Once
-var networkOnce sync.Once
+var once sync.Once
 var dockerPool *dockertest.Pool
-var dockerNetwork *dockertest.Network
 var poolToHost = make(map[*sql.DB]string)
 
 func init() {
@@ -36,33 +34,21 @@ func init() {
 }
 
 func getDockerPool(t *testing.T) *dockertest.Pool {
-	poolOnce.Do(func() {
+	once.Do(func() {
 		var err error
 		dockerPool, err = dockertest.NewPool("")
 		if err != nil {
 			t.Fatalf("creating dockertest pool instance: %v", err)
 		}
 	})
-	//dockerPool, err := dockertest.NewPool("")
-	//if err != nil {
-	//	t.Fatalf("creating dockertest pool instance: %v", err)
-	//}
 	return dockerPool
 }
 
 func getDockerNetwork(t *testing.T, pool *dockertest.Pool) *dockertest.Network {
-	networkOnce.Do(func() {
-		var err error
-
-		dockerNetwork, err = pool.CreateNetwork("dbfailover_test_network")
-		if err != nil {
-			t.Fatalf("creating pool network: %v", err)
-		}
-	})
-	//dockerNetwork, err := pool.CreateNetwork("dbfailover_test_network")
-	//if err != nil {
-	//	t.Fatalf("creating pool network: %v", err)
-	//}
+	dockerNetwork, err := pool.CreateNetwork(fmt.Sprintf("dbfailover_test_network-%s", t.Name()))
+	if err != nil {
+		t.Fatalf("creating pool network: %v", err)
+	}
 	return dockerNetwork
 }
 
