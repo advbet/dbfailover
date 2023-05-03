@@ -39,6 +39,6 @@ jobs:
       - name: Test
         run: go test -v -failfast -timeout 600s ./...
         env:
-          CONTAINER_HOST: dind
-#          DOCKER_HOST: tcp://docker:2376
+          DOCKER_HOST: tcp://dind:2375
+#          CONTAINER_HOST: dind
 #          DOCKER_TLS_VERIFY: true
