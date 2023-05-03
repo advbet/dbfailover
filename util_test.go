@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -90,7 +88,7 @@ func startMariaDB(pool *dockertest.Pool, network *dockertest.Network, wsrep bool
 	dsn := fmt.Sprintf(
 		"%s:%s@tcp(%s)/%s",
 		mariaDBUser, mariaDBPassword,
-		getHostPort(resource, "3306/tcp"), mariaDBName,
+		resource.GetHostPort("3306/tcp"), mariaDBName,
 	)
 	if err = pool.Retry(func() error {
 		db, err := sql.Open("mysql", dsn)
@@ -217,16 +215,4 @@ func startSlaveInstance(t *testing.T, pool *dockertest.Pool, network *dockertest
 	}
 
 	return db, r
-}
-
-func getHostPort(resource *dockertest.Resource, id string) string {
-	dockerURL := os.Getenv("DOCKER_HOST")
-	if dockerURL == "" {
-		return resource.GetHostPort(id)
-	}
-	u, err := url.Parse(dockerURL)
-	if err != nil {
-		panic(err)
-	}
-	return u.Hostname() + ":" + resource.GetPort(id)
 }
