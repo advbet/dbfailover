@@ -17,11 +17,9 @@ jobs:
 
     services:
       dind:
-        image: docker:23.0-dind
+        image: docker:23.0-dind-rootless
         ports:
           - 2375:2375
-#        options: >-
-#          --privileged
 
     steps:
       - uses: actions/checkout@v3
@@ -36,5 +34,3 @@ jobs:
 
       - name: Test
         run: go test -v -failfast -timeout 600s ./...
-#        env:
-#          DOCKER_HOST: tcp://dind:2375
