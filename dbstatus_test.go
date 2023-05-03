@@ -441,13 +441,6 @@ func TestCheckReadOnlyStatus(t *testing.T) {
 }
 
 func TestCheckWsrepStatus(t *testing.T) {
-	dp := dockerPool(t)
-	net, err := dp.CreateNetwork("wsrep")
-	if err != nil {
-		t.Fatalf("creating docker network for galera: %v", err)
-	}
-	defer net.Close()
-
 	master, cleanup := startMasterInstance(t)
 	defer cleanup()
 	node1, cleanup := startGaleraInstance(t)
