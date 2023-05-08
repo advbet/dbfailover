@@ -24,6 +24,7 @@ type voidLogger struct{}
 func (l voidLogger) Print(v ...interface{}) {}
 
 func init() {
+	// nolint:errcheck
 	mysql.SetLogger(voidLogger{})
 }
 

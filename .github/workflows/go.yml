@@ -3,25 +3,39 @@ name: Go
 on: [push]
 
 jobs:
-  build:
+  golanglint:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.17
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
 
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: v1.45
-        args: --disable-all --enable=govet --enable=unused --enable=structcheck --enable=deadcode
+  go-test-matrix:
+    runs-on: ubuntu-latest
+#    services:
+#      dind:
+#        image: docker:23.0-rc-dind-rootless
+#        ports:
+#          - 2375:2375
 
-    - name: Build
-      run: go build -v ./...
+    strategy:
+      max-parallel: 1
+      matrix:
+        version: ['1.17', '1.18', '1.19', '1.20']
 
-#    - name: Test
-#      run: go test -race -failfast -timeout 60s -v ./...
+    name: Go ${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Use go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.version }}
+
+      - name: Build
+        run: go build -v ./...
+
+#      - name: Test
+#        run: go test -v -race -failfast -timeout 60s ./...
