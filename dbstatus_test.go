@@ -297,27 +297,34 @@ func TestMergeStatus(t *testing.T) {
 }
 
 func TestSlaveStatus(t *testing.T) {
-	offline := startOfflineInstance(t)
-	master, cleanup := startMasterInstance(t)
-	defer cleanup()
+	pool := getDockerPool(t)
+	network := getDockerNetwork(t, pool)
+	defer pool.RemoveNetwork(network)
 
-	stoppedSlave, cleanup := startSlaveInstance(t, master)
-	defer cleanup()
+	offline := startOfflineInstance(t)
+	master, masterResource := startMasterInstance(t, pool, network)
+	defer pool.Purge(masterResource)
+
+	stoppedSlave, stoppedSlaveResource := startSlaveInstance(t, pool, network, master)
+	defer pool.Purge(stoppedSlaveResource)
+
 	if _, err := stoppedSlave.Exec("STOP SLAVE"); err != nil {
 		t.Fatalf("failed to prepare stopped slave: %v", err)
 	}
 
-	failedSlave, cleanup := startSlaveInstance(t, master)
-	defer cleanup()
+	failedSlave, failedSlaveResource := startSlaveInstance(t, pool, network, master)
+	defer pool.Purge(failedSlaveResource)
+
 	if _, err := failedSlave.Exec("CREATE USER a@localhost"); err != nil {
 		t.Fatalf("executing DML on slave to fail replication: %v", err)
 	}
+
 	if _, err := master.Exec("CREATE USER a@localhost"); err != nil {
 		t.Fatalf("executing DML on master to fail replication: %v", err)
 	}
 
-	goodSlave, cleanup := startSlaveInstance(t, master)
-	defer cleanup()
+	goodSlave, goodSlaveResource := startSlaveInstance(t, pool, network, master)
+	defer pool.Purge(goodSlaveResource)
 
 	tests := []struct {
 		msg        string
@@ -392,10 +399,16 @@ func TestSlaveStatus(t *testing.T) {
 }
 
 func TestCheckReadOnlyStatus(t *testing.T) {
-	master, cleanup := startMasterInstance(t)
-	defer cleanup()
-	slave, cleanup := startSlaveInstance(t, nil)
-	defer cleanup()
+	pool := getDockerPool(t)
+	network := getDockerNetwork(t, pool)
+	defer pool.RemoveNetwork(network)
+
+	master, masterResource := startMasterInstance(t, pool, network)
+	defer pool.Purge(masterResource)
+
+	slave, slaveResource := startSlaveInstance(t, pool, network, nil)
+	defer pool.Purge(slaveResource)
+
 	offline := startOfflineInstance(t)
 
 	tests := []struct {
@@ -441,21 +454,21 @@ func TestCheckReadOnlyStatus(t *testing.T) {
 }
 
 func TestCheckWsrepStatus(t *testing.T) {
-	dp := dockerPool(t)
-	net, err := dp.CreateNetwork("wsrep")
-	if err != nil {
-		t.Fatalf("creating docker network for galera: %v", err)
-	}
-	defer net.Close()
+	pool := getDockerPool(t)
+	network := getDockerNetwork(t, pool)
+	defer pool.RemoveNetwork(network)
 
-	master, cleanup := startMasterInstance(t)
-	defer cleanup()
-	node1, cleanup := startGaleraInstance(t)
-	defer cleanup()
-	node2, cleanup := startGaleraInstance(t, node1)
-	defer cleanup()
-	node3, cleanup := startGaleraInstance(t, node1, node2)
-	defer cleanup()
+	master, masterResource := startMasterInstance(t, pool, network)
+	defer pool.Purge(masterResource)
+
+	node1, node1Resource := startGaleraInstance(t, pool, network)
+	defer pool.Purge(node1Resource)
+
+	node2, node2Resource := startGaleraInstance(t, pool, network, node1)
+	defer pool.Purge(node2Resource)
+
+	node3, node3Resource := startGaleraInstance(t, pool, network, node1, node2)
+	defer pool.Purge(node3Resource)
 
 	tests := []struct {
 		msg    string

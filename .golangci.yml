@@ -2,3 +2,4 @@ linters-settings:
   errcheck:
     exclude-functions:
       - (*github.com/ory/dockertest/v3.Pool).Purge
+      - (*github.com/ory/dockertest/v3.Pool).RemoveNetwork

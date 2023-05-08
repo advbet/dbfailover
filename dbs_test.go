@@ -14,10 +14,16 @@ func TestNewEmpty(t *testing.T) {
 }
 
 func TestFailover(t *testing.T) {
-	adb, cleanup := startMasterInstance(t)
-	defer cleanup()
-	bdb, cleanup := startSlaveInstance(t, adb)
-	defer cleanup()
+	pool := getDockerPool(t)
+	network := getDockerNetwork(t, pool)
+	defer pool.RemoveNetwork(network)
+
+	adb, masterResource := startMasterInstance(t, pool, network)
+	defer pool.Purge(masterResource)
+
+	bdb, slaveResource := startSlaveInstance(t, pool, network, adb)
+	defer pool.Purge(slaveResource)
+
 	cdb := startOfflineInstance(t)
 
 	names := map[*sql.DB]string{
