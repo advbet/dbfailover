@@ -29,7 +29,8 @@ var dockerPool *dockertest.Pool
 var poolToHost = make(map[*sql.DB]string)
 
 func init() {
-	_ = mysql.SetLogger(voidLogger{})
+	// nolint:errcheck
+	mysql.SetLogger(voidLogger{})
 }
 
 func getDockerPool(t *testing.T) *dockertest.Pool {
