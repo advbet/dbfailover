@@ -16,19 +16,13 @@ func TestNewEmpty(t *testing.T) {
 func TestFailover(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
-	defer func() {
-		pool.RemoveNetwork(network)
-	}()
+	defer pool.RemoveNetwork(network)
 
 	adb, masterResource := startMasterInstance(t, pool, network)
-	defer func() {
-		pool.Purge(masterResource)
-	}()
+	defer pool.Purge(masterResource)
 
 	bdb, slaveResource := startSlaveInstance(t, pool, network, adb)
-	defer func() {
-		pool.Purge(slaveResource)
-	}()
+	defer pool.Purge(slaveResource)
 
 	cdb := startOfflineInstance(t)
 

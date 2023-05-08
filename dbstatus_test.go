@@ -299,28 +299,22 @@ func TestMergeStatus(t *testing.T) {
 func TestSlaveStatus(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
-	defer func() {
-		pool.RemoveNetwork(network)
-	}()
+	defer pool.RemoveNetwork(network)
 
 	offline := startOfflineInstance(t)
 	master, masterResource := startMasterInstance(t, pool, network)
-	defer func() {
-		pool.Purge(masterResource)
-	}()
+	defer pool.Purge(masterResource)
 
 	stoppedSlave, stoppedSlaveResource := startSlaveInstance(t, pool, network, master)
-	defer func() {
-		pool.Purge(stoppedSlaveResource)
-	}()
+	defer pool.Purge(stoppedSlaveResource)
+
 	if _, err := stoppedSlave.Exec("STOP SLAVE"); err != nil {
 		t.Fatalf("failed to prepare stopped slave: %v", err)
 	}
 
 	failedSlave, failedSlaveResource := startSlaveInstance(t, pool, network, master)
-	defer func() {
-		pool.Purge(failedSlaveResource)
-	}()
+	defer pool.Purge(failedSlaveResource)
+
 	if _, err := failedSlave.Exec("CREATE USER a@localhost"); err != nil {
 		t.Fatalf("executing DML on slave to fail replication: %v", err)
 	}
@@ -330,9 +324,7 @@ func TestSlaveStatus(t *testing.T) {
 	}
 
 	goodSlave, goodSlaveResource := startSlaveInstance(t, pool, network, master)
-	defer func() {
-		pool.Purge(goodSlaveResource)
-	}()
+	defer pool.Purge(goodSlaveResource)
 
 	tests := []struct {
 		msg        string
@@ -409,19 +401,13 @@ func TestSlaveStatus(t *testing.T) {
 func TestCheckReadOnlyStatus(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
-	defer func() {
-		pool.RemoveNetwork(network)
-	}()
+	defer pool.RemoveNetwork(network)
 
 	master, masterResource := startMasterInstance(t, pool, network)
-	defer func() {
-		pool.Purge(masterResource)
-	}()
+	defer pool.Purge(masterResource)
 
 	slave, slaveResource := startSlaveInstance(t, pool, network, nil)
-	defer func() {
-		pool.Purge(slaveResource)
-	}()
+	defer pool.Purge(slaveResource)
 
 	offline := startOfflineInstance(t)
 
@@ -470,29 +456,19 @@ func TestCheckReadOnlyStatus(t *testing.T) {
 func TestCheckWsrepStatus(t *testing.T) {
 	pool := getDockerPool(t)
 	network := getDockerNetwork(t, pool)
-	defer func() {
-		pool.RemoveNetwork(network)
-	}()
+	defer pool.RemoveNetwork(network)
 
 	master, masterResource := startMasterInstance(t, pool, network)
-	defer func() {
-		pool.Purge(masterResource)
-	}()
+	defer pool.Purge(masterResource)
 
 	node1, node1Resource := startGaleraInstance(t, pool, network)
-	defer func() {
-		pool.Purge(node1Resource)
-	}()
+	defer pool.Purge(node1Resource)
 
 	node2, node2Resource := startGaleraInstance(t, pool, network, node1)
-	defer func() {
-		pool.Purge(node2Resource)
-	}()
+	defer pool.Purge(node2Resource)
 
 	node3, node3Resource := startGaleraInstance(t, pool, network, node1, node2)
-	defer func() {
-		pool.Purge(node3Resource)
-	}()
+	defer pool.Purge(node3Resource)
 
 	tests := []struct {
 		msg    string
