@@ -44,6 +44,10 @@ type statusUpdate struct {
 // Master() and Slave() methods will never return nil.
 var ErrNoDatabases = errors.New("empty database set provided")
 
+// ErrMultipleMasters is returned if master selection found multiple master connections.
+// This indicates a faulty topology configuration and should be treated as an error.
+var ErrMultipleMasters = errors.New("multiple database master connections found")
+
 // New creates a new instance of database pools checker.
 //
 // It will block until initial databases state is detected, therefore it is safe
@@ -79,6 +83,11 @@ func NewWithConfig(dbs []*sql.DB, cfg Config) (*DBs, error) {
 		stop:   cancel,
 		config: cfg,
 	}
+
+	if p.active.multipleMasters {
+		return nil, ErrMultipleMasters
+	}
+
 	go p.run(ctx, state, lastMaster)
 
 	return p, nil
@@ -90,10 +99,17 @@ func NewWithConfig(dbs []*sql.DB, cfg Config) (*DBs, error) {
 // This function will never return nil. If there are no master servers
 // available it will return last seen master. It allows this function result to
 // be used without additional checks, example: `dbs.Master().Query(...)`.
+//
+// If multiple master connections are detected a special sql.DB connection will be returned
+// which on execution will always return an error, preventing any potential data corruption.
 func (p *DBs) Master() *sql.DB {
 	p.mu.RLock()
 	active := p.active
 	p.mu.RUnlock()
+
+	if active.multipleMasters {
+		return newMultipleMasterErrConn()
+	}
 
 	if active.master != nil {
 		return active.master

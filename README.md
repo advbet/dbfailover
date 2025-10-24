@@ -1,7 +1,7 @@
 dbfailover
 ==========
 
-[![GoDoc](https://godoc.org/bitbucket.org/advbet/dbfailover?status.svg)](https://godoc.org/bitbucket.org/advbet/dbfailover)
+[![GoDoc](https://godoc.org/github.com/advbet/dbfailover?status.svg)](https://godoc.org/github.com/advbet/dbfailover)
 
 This is a go package for managing access to multiple MySQL/MariaDB servers. This
 package takes a list of DB handlers (as slice of `*sql.DB`) and provides methods
@@ -17,6 +17,12 @@ master. This is important to take into consideration when performing server
 failover. If server is actually running in slave mode but have `read_only` flag
 set to false it will receive DML queries from the services using this package
 and this will most likely cause data replication failure.
+
+Multiple master connection handling
+---------------------
+
+If multiple connections with master role are detected, when calling `Master()` method, a special `*sql.DB`
+connections is returned which when used, will always return `ErrMultipleMasters` error.
 
 Usage example
 -------------

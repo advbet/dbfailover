@@ -67,16 +67,17 @@ func TestMakeSelection(t *testing.T) {
 			},
 		},
 		{
-			msg: "two masters one slave pick lowest latency",
+			msg: "two masters one slave pick lowest latency and set multiple master flag",
 			states: map[*sql.DB]dbStatus{
 				db1: {role: roleMaster, latency: 5 * time.Second},
 				db2: {role: roleMaster, latency: 2 * time.Second},
 				db3: {role: roleSlave, latency: 1 * time.Second},
 			},
 			want: selection{
-				master:     db2,
-				slave:      db3,
-				lastMaster: db2,
+				master:          db2,
+				slave:           db3,
+				lastMaster:      db2,
+				multipleMasters: true,
 			},
 		},
 		{
