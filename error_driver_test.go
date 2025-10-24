@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestNewFaultyTopologyErrDriver(t *testing.T) {
+func TestNewMultipleMasterErrConn(t *testing.T) {
 	db := newMultipleMasterErrConn()
 	if db == nil {
 		t.Fatal("connection is nil")
