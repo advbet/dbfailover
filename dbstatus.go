@@ -117,11 +117,13 @@ func mergeStatus(ss slaveStatus, rs readOnlyStatus, ws wsrepStatus, maxReplicati
 }
 
 func checkDBStatus(db *sql.DB, cfg Config) dbStatus {
-	var wg sync.WaitGroup
+	var (
+		wg sync.WaitGroup
 
-	var ss slaveStatus
-	var rs readOnlyStatus
-	var ws wsrepStatus
+		ss slaveStatus
+		rs readOnlyStatus
+		ws wsrepStatus
+	)
 
 	wg.Add(1)
 	go func() {
@@ -152,8 +154,10 @@ func checkReadOnlyStatus(db *sql.DB, timeout time.Duration) readOnlyStatus {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	var key string
-	var val string
+	var (
+		key string
+		val string
+	)
 	start := time.Now()
 	err := db.QueryRowContext(ctx, "SHOW VARIABLES LIKE 'read_only'").Scan(&key, &val)
 	d := time.Since(start)
@@ -175,8 +179,10 @@ func checkWsrepStatus(db *sql.DB, timeout time.Duration) wsrepStatus {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	var key string
-	var val string
+	var (
+		key string
+		val string
+	)
 	start := time.Now()
 	err := db.QueryRowContext(ctx, "SHOW VARIABLES LIKE 'wsrep_on'").Scan(&key, &val)
 	d := time.Since(start)
