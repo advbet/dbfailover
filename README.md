@@ -22,7 +22,7 @@ Multiple master connection handling
 ---------------------
 
 If multiple connections with master role are detected, when calling `Master()` method, a special `*sql.DB`
-connections is returned which when used, will always return `ErrMultipleMasters` error.
+connection is returned which when used, will always return `ErrMultipleMasters` error.
 
 Usage example
 -------------
