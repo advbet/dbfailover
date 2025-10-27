@@ -13,11 +13,13 @@ type selection struct {
 }
 
 func makeSelection(statuses map[*sql.DB]dbStatus, lastMaster *sql.DB) selection {
-	var master *sql.DB
-	var masterLatency time.Duration
-	var slave *sql.DB
-	var slaveLatency time.Duration
-	var multipleMasters bool
+	var (
+		master          *sql.DB
+		masterLatency   time.Duration
+		slave           *sql.DB
+		slaveLatency    time.Duration
+		multipleMasters bool
+	)
 
 	for db, status := range statuses {
 		switch status.role {
