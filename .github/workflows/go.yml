@@ -7,24 +7,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v6
 
   go-test-matrix:
     runs-on: ubuntu-latest
 
     services:
       dind:
-        image: docker:23.0-dind-rootless
+        image: docker:29.2-dind-rootless
         ports:
           - 2375:2375
 
     strategy:
       max-parallel: 1
       matrix:
-        version: ['1.17', '1.18', '1.19', '1.20']
+        version: ['1.24', '1.25']
 
     name: Go ${{ matrix.version }}
     steps:
