@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   golanglint:
-    runs-on: ubuntu
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
@@ -13,7 +13,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
 
   go-test-matrix:
-    runs-on: ubuntu
+    runs-on: ubuntu-latest
 
     services:
       dind:
